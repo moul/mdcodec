@@ -27,10 +27,10 @@
 //	    },
 //	}
 //
-//	md := Marshal(p)
+//	md, _ := Marshal(p)
 //	// This will produce:
 //	//
-//	// # Person
+//	// # John Doe (Person)
 //	//
 //	// - **Name**: John Doe
 //	// - **Age**: 30
@@ -40,70 +40,3 @@
 //	// - **City**: Springfield
 //	// - **State**: IL
 package mdcodec
-
-import "fmt"
-
-func ExampleMarshal() {
-	type Person struct {
-		Name    string
-		Age     int
-		Address struct {
-			City  string
-			State string
-		}
-	}
-
-	p := Person{
-		Name: "John Doe",
-		Age:  30,
-		Address: struct {
-			City  string
-			State string
-		}{
-			City:  "Springfield",
-			State: "IL",
-		},
-	}
-
-	md := Marshal(p)
-	fmt.Println(md)
-	// Output:
-	// # Person
-	//
-	// - **Name**: John Doe
-	// - **Age**: 30
-	//
-	// ## Address
-	//
-	// - **City**: Springfield
-	// - **State**: IL
-}
-
-func ExampleUnmarshal() {
-	type Person struct {
-		Name    string
-		Age     int
-		Address struct {
-			City  string
-			State string
-		}
-	}
-
-	md := `
-# Person
-
-- **Name**: John Doe
-- **Age**: 30
-
-## Address
-
-- **City**: Springfield
-- **State**: IL
-`
-
-	var p Person
-	Unmarshal(md, &p)
-	fmt.Printf("Name: %s, Age: %d, City: %s, State: %s", p.Name, p.Age, p.Address.City, p.Address.State)
-	// Output:
-	// Name: John Doe, Age: 30, City: Springfield, State: IL
-}

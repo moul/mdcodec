@@ -1,51 +1,57 @@
 package mdcodec
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 )
 
-func Marshal(v interface{}) string {
+func Marshal(v interface{}) (string, error) {
 	val := reflect.ValueOf(v)
-
-	// We will use a StringBuilder for building our markdown representation
-	var builder strings.Builder
-
-	// We start by examining the type of the top-level struct
-	writeStruct(&builder, val, "", "")
-
-	return builder.String()
-}
-
-func writeStruct(builder *strings.Builder, val reflect.Value, name string, prefix string) {
-	typ := val.Type()
-
-	if name == "" {
-		name = typ.Name()
+	if val.Kind() != reflect.Ptr || val.IsNil() {
+		return "", errors.New("expected pointer to a value")
 	}
 
-	// Begin the section with the name of the struct
-	builder.WriteString(prefix + "# " + name + "\n\n")
+	val = val.Elem()
+	return marshalStruct(val, ""), nil
+}
 
-	for i := 0; i < val.NumField(); i++ {
-		fieldType := typ.Field(i)
-		fieldValue := val.Field(i)
+func marshalStruct(val reflect.Value, indent string) string {
+	var result strings.Builder
 
-		switch fieldValue.Kind() {
-		case reflect.String:
-			builder.WriteString(fmt.Sprintf("- **%s**: %s\n", fieldType.Name, fieldValue.String()))
-		case reflect.Int:
-			builder.WriteString(fmt.Sprintf("- **%s**: %d\n", fieldType.Name, fieldValue.Int()))
-		case reflect.Struct:
-			builder.WriteString("\n")
-			writeStruct(builder, fieldValue, fieldType.Name, prefix+"#")
-		default:
-			// You can handle other types or ignore them
+	// Extract name using the md:"title" tag
+	nameField := findFieldNameByTag(val.Type(), "title")
+	if nameField != "" {
+		name := val.FieldByName(nameField).String()
+		if indent == "" { // Only add type for the top-level structure
+			result.WriteString(fmt.Sprintf("# %s (%s)\n", name, val.Type().Name()))
 		}
 	}
 
-	if prefix != "" {
-		builder.WriteString("\n")
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+		fieldType := val.Type().Field(i)
+		if fieldType.Name == nameField {
+			continue
+		}
+
+		switch field.Kind() {
+		case reflect.Struct:
+			result.WriteString(fmt.Sprintf("%s- **%s**:\n", indent, fieldType.Name))
+			result.WriteString(marshalStruct(field, indent+"  "))
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			result.WriteString(fmt.Sprintf("%s- **%s**: %d\n", indent, fieldType.Name, field.Int()))
+		case reflect.Float32, reflect.Float64:
+			result.WriteString(fmt.Sprintf("%s- **%s**: %f\n", indent, fieldType.Name, field.Float()))
+		case reflect.Bool:
+			result.WriteString(fmt.Sprintf("%s- **%s**: %t\n", indent, fieldType.Name, field.Bool()))
+		case reflect.String:
+			result.WriteString(fmt.Sprintf("%s- **%s**: %s\n", indent, fieldType.Name, field.String()))
+		default:
+			result.WriteString(fmt.Sprintf("%s- **%s**: %v\n", indent, fieldType.Name, field.Interface()))
+		}
 	}
+
+	return result.String()
 }
