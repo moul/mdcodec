@@ -1,4 +1,4 @@
-# MDEncode
+# Mdcodec
 
 Transform Go structures into readable Markdown, tailored for both human and machine consumption.
 
@@ -30,7 +30,7 @@ p := Person{Name: "John Doe", Age:  30}
 p.Address.City = "Sprintfield"
 p.Address.State = "IL"
 
-md := mdencode.Marshal(p)
+md := mdcodec.Marshal(p)
 fmt.Println(md)
 
 // Output:
@@ -49,9 +49,9 @@ fmt.Println(md)
 
 ```go
 var p Person
-err := mdencode.Unmarshal(md, &p)
+err := mdcodec.Unmarshal(md, &p)
 ```
 
 ## 🔧 Installation
 
-    go get moul.io/mdencode
+    go get moul.io/mdcodec

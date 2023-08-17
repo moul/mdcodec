@@ -1,4 +1,4 @@
-// Package mdencode provides tools to convert Go structures to and from readable Markdown.
+// Package mdcodec provides tools to convert Go structures to and from readable Markdown.
 //
 // The primary functionality of the package is to offer marshalling and unmarshalling capabilities
 // between Go structures and a corresponding Markdown representation. This Markdown representation
@@ -10,8 +10,8 @@
 //	    Name    string
 //	    Age     int
 //	    Address struct {
-//	        City  string
-//	        State string
+//		City  string
+//		State string
 //	    }
 //	}
 //
@@ -19,11 +19,11 @@
 //	    Name: "John Doe",
 //	    Age:  30,
 //	    Address: struct {
-//	        City  string
-//	        State string
+//		City  string
+//		State string
 //	    }{
-//	        City:  "Springfield",
-//	        State: "IL",
+//		City:  "Springfield",
+//		State: "IL",
 //	    },
 //	}
 //
@@ -39,7 +39,7 @@
 //	//
 //	// - **City**: Springfield
 //	// - **State**: IL
-package mdencode
+package mdcodec
 
 import "fmt"
 

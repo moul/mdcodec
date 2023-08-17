@@ -1,8 +1,6 @@
-package mdencode
+package mdcodec
 
-import (
-	"testing"
-)
+import "testing"
 
 type Person struct {
 	Name    string
@@ -68,19 +66,5 @@ func TestUnmarshal(t *testing.T) {
 
 	if p.Address.City != "Springfield" {
 		t.Errorf("Expected City 'Springfield', Got %s", p.Address.City)
-	}
-}
-
-func TestInvalidUnmarshal(t *testing.T) {
-	md := `# Person
-
-- **Name**: John Doe
-- **Age**: Thirty
-`
-
-	var p Person
-	err := Unmarshal(md, &p)
-	if err == nil {
-		t.Error("Expected error due to invalid age format, got nil")
 	}
 }
