@@ -34,15 +34,11 @@ md := mdcodec.Marshal(p)
 fmt.Println(md)
 
 // Output:
-// # Person
-//
-// - **Name**: John Doe
+// # John Doe (Person)
 // - **Age**: 30
-//
-// ## Address
-//
-// - **City**: Springfield
-// - **State**: IL
+// - **Address**:
+//   - **City**: Springfield
+//   - **State**: IL
 ```
 
 ---
