@@ -14,17 +14,9 @@ type Person struct {
 }
 
 func TestMarshal(t *testing.T) {
-	p := Person{
-		Name: "John Doe",
-		Age:  30,
-		Address: struct {
-			Street string
-			City   string
-		}{
-			Street: "123 Maple St.",
-			City:   "Springfield",
-		},
-	}
+	p := Person{Name: "John Doe", Age: 30}
+	p.Address.Street = "123 Maple St."
+	p.Address.City = "Springfield"
 
 	md := Marshal(p)
 	expected := `# Person
@@ -36,6 +28,7 @@ func TestMarshal(t *testing.T) {
 
 - **Street**: 123 Maple St.
 - **City**: Springfield
+
 `
 
 	if md != expected {
@@ -58,8 +51,7 @@ func TestUnmarshal(t *testing.T) {
 	var p Person
 	err := Unmarshal(md, &p)
 	if err != nil {
-		t.Errorf("Error during unmarshal: %v", err)
-		return
+		t.Fatalf("Error during unmarshal: %v", err)
 	}
 
 	if p.Name != "John Doe" {

@@ -15,16 +15,20 @@ func Marshal(v interface{}) string {
 	var builder strings.Builder
 
 	// We start by examining the type of the top-level struct
-	writeStruct(&builder, val, "")
+	writeStruct(&builder, val, "", "")
 
 	return builder.String()
 }
 
-func writeStruct(builder *strings.Builder, val reflect.Value, prefix string) {
+func writeStruct(builder *strings.Builder, val reflect.Value, name string, prefix string) {
 	typ := val.Type()
 
+	if name == "" {
+		name = typ.Name()
+	}
+
 	// Begin the section with the name of the struct
-	builder.WriteString(prefix + "# " + typ.Name() + "\n\n")
+	builder.WriteString(prefix + "# " + name + "\n\n")
 
 	for i := 0; i < val.NumField(); i++ {
 		fieldType := typ.Field(i)
@@ -37,12 +41,15 @@ func writeStruct(builder *strings.Builder, val reflect.Value, prefix string) {
 			builder.WriteString(fmt.Sprintf("- **%s**: %d\n", fieldType.Name, fieldValue.Int()))
 		case reflect.Struct:
 			builder.WriteString("\n")
-			writeStruct(builder, fieldValue, prefix+"#")
+			writeStruct(builder, fieldValue, fieldType.Name, prefix+"#")
 		default:
 			// You can handle other types or ignore them
 		}
 	}
-	builder.WriteString("\n")
+
+	if prefix != "" {
+		builder.WriteString("\n")
+	}
 }
 
 func Unmarshal(md string, v interface{}) error {
@@ -55,55 +62,51 @@ func Unmarshal(md string, v interface{}) error {
 
 	val := ptrValue.Elem()
 
-	_, err := parseStruct(lines, val, 0)
-	return err
+	return parseStruct(lines, val)
 }
 
-func parseStruct(lines []string, val reflect.Value, start int) (int, error) {
-	// typ := val.Type()
+func parseStruct(lines []string, val reflect.Value) error {
+	type context struct {
+		prefix string
+		val    reflect.Value
+	}
+	stack := []context{{prefix: "#", val: val}}
 
-	for i := start; i < len(lines); i++ {
-		line := lines[i]
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#") {
+			prefix := strings.SplitN(line, " ", 2)[0]
+			fieldName := strings.TrimPrefix(line, prefix+" ")
 
-		// Check if it's a struct field line like "- **Name**: John"
-		if strings.HasPrefix(line, "- **") {
-			parts := strings.SplitN(line, "**:", 2)
-			if len(parts) < 2 {
-				continue
+			if prefix == stack[len(stack)-1].prefix+"#" {
+				parent := stack[len(stack)-1].val
+				stack = append(stack, context{prefix: prefix, val: parent.FieldByName(fieldName)})
+			} else {
+				for len(stack) > 1 && stack[len(stack)-1].prefix != prefix {
+					stack = stack[:len(stack)-1]
+				}
 			}
+			continue
+		}
 
-			fieldName := strings.Trim(parts[0], "- ** ")
-			fieldValueStr := strings.TrimSpace(parts[1])
-
-			// Find the field in the struct
-			field := val.FieldByName(fieldName)
-			if !field.IsValid() {
-				continue
+		parts := strings.SplitN(line, "**: ", 2)
+		if len(parts) == 2 {
+			fieldName := strings.TrimPrefix(parts[0], "- **")
+			field := stack[len(stack)-1].val.FieldByName(fieldName)
+			if !field.IsValid() || !field.CanSet() {
+				return fmt.Errorf("invalid field %s", fieldName)
 			}
-
 			switch field.Kind() {
 			case reflect.String:
-				field.SetString(fieldValueStr)
+				field.SetString(parts[1])
 			case reflect.Int:
-				intVal, err := strconv.Atoi(fieldValueStr)
+				n, err := strconv.ParseInt(parts[1], 10, 64)
 				if err != nil {
-					return i, err
+					return fmt.Errorf("not a number: %q", parts[1])
 				}
-				field.SetInt(int64(intVal))
-			case reflect.Struct:
-				var err error
-				i, err = parseStruct(lines, field, i+1)
-				if err != nil {
-					return i, err
-				}
-			default:
-				// Handle other types or ignore them
+				field.SetInt(n)
 			}
-		} else if strings.HasPrefix(line, "# ") {
-			// New struct detected, so we return
-			return i - 1, nil
 		}
 	}
 
-	return len(lines) - 1, nil
+	return nil
 }
