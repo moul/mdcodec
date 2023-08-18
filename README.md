@@ -20,7 +20,7 @@ Transform Go structures into readable Markdown, tailored for both human and mach
 
 ```go
 type Person struct {
-    Name    string
+    Name    string `md:"title"`
     Age     int
     Address struct {
         City  string
@@ -39,6 +39,7 @@ fmt.Println(md)
 
 // Output:
 // # John Doe (Person)
+//
 // - **Age**: 30
 // - **Address**:
 //   - **City**: Springfield
