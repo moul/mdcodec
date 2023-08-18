@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// Unmarshal will convert markdown content to a Go struct.
 func Unmarshal(md string, v interface{}) error {
 	lines := strings.Split(md, "\n")
 	ptrValue := reflect.ValueOf(v)
@@ -17,99 +18,124 @@ func Unmarshal(md string, v interface{}) error {
 	}
 
 	val := ptrValue.Elem()
-
 	return parseStruct(lines, val)
 }
 
 func parseStruct(lines []string, val reflect.Value) error {
-	if len(lines) == 0 {
-		return nil
-	}
+	var i int
+	for i = 0; i < len(lines); i++ {
+		line := lines[i]
 
-	for len(lines) > 0 {
-		line := lines[0]
-		lines = lines[1:]
+		if strings.HasPrefix(line, "# ") {
+			// This denotes a new struct (or a title); we should move on
+			continue
+		}
 
 		if strings.HasPrefix(line, "- **") {
-			parts := strings.SplitN(line, "**:", 2)
-			if len(parts) < 2 {
+			// This is a field
+			parts := strings.SplitN(line, ":", 2)
+			right := strings.TrimPrefix(parts[1], " ")
+			fieldName := strings.TrimSuffix(strings.TrimPrefix(parts[0], "- **"), "**")
+
+			// Check if we're dealing with a sub-struct or slice (indicated by a newline without a value after the colon)
+			if len(parts) == 1 || right == "" {
+				field, ok := fieldByName(val, fieldName)
+				if !ok {
+					return fmt.Errorf("no field with tag: %s", fieldName)
+				}
+				subLines, remainingLines := findEndOfSubStruct(lines[i+1:])
+				if field.Kind() == reflect.Slice {
+					// If it's a slice, we need to handle each element
+					elemType := field.Type().Elem()
+					slice := reflect.MakeSlice(field.Type(), 0, len(subLines))
+					for _, itemStr := range subLines {
+						item := reflect.New(elemType).Elem()
+						// Assume each item in the slice is a single line for simplicity; adjust as needed
+						if err := setFieldValue(item, fieldName, itemStr); err != nil {
+							return err
+						}
+						slice = reflect.Append(slice, item)
+					}
+					field.Set(slice)
+				} else if field.Kind() == reflect.Struct {
+					// If it's a struct, recursively parse
+					if err := parseStruct(subLines, field); err != nil {
+						return err
+					}
+				}
+				// Adjust the outer loop's index to skip over the lines we've just processed
+				i += len(subLines)
+				lines = remainingLines
 				continue
 			}
 
-			fieldName := strings.Trim(parts[0][4:], "* ")
-			fieldValStr := strings.TrimSpace(parts[1])
-
-			field := val.FieldByName(fieldName)
-			if !field.IsValid() {
-				return fmt.Errorf("no such field: %s in %v", fieldName, val.Type())
-			}
-			if !field.CanSet() {
-				return fmt.Errorf("cannot set field: %s", fieldName)
-			}
-
-			switch field.Kind() {
-			case reflect.Struct:
-				if fieldValStr != "" {
-					return errors.New("unexpected value for nested struct")
-				}
-				// Recursively parse the struct
-				endIdx := findEndOfSubStruct(lines)
-				if err := parseStruct(lines[:endIdx], field); err != nil {
-					return err
-				}
-				lines = lines[endIdx:]
-			default:
-				if err := parseValue(fieldValStr, field); err != nil {
-					return err
-				}
+			fieldValueStr := right
+			if err := setFieldValue(val, fieldName, fieldValueStr); err != nil {
+				return err
 			}
 		}
 	}
 	return nil
 }
 
-func parseValue(s string, v reflect.Value) error {
-	switch v.Kind() {
-	case reflect.String:
-		v.SetString(s)
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		i, err := strconv.ParseInt(s, 10, 64)
-		if err != nil {
-			return err
-		}
-		v.SetInt(i)
-	case reflect.Float32, reflect.Float64:
-		f, err := strconv.ParseFloat(s, 64)
-		if err != nil {
-			return err
-		}
-		v.SetFloat(f)
-	case reflect.Bool:
-		b, err := strconv.ParseBool(s)
-		if err != nil {
-			return err
-		}
-		v.SetBool(b)
-	default:
-		return fmt.Errorf("unsupported type: %s", v.Type().Name())
+func fieldByName(v reflect.Value, name string) (reflect.Value, bool) {
+	field := v.FieldByName(name)
+	if field.IsValid() {
+		return field, true
 	}
-	return nil
+	return reflect.Value{}, false
 }
 
-func findEndOfSubStruct(lines []string) int {
-	indentCount := countLeadingSpaces(lines[0])
+func fieldByTag(v reflect.Value, tagValue string) (reflect.Value, bool) {
+	typ := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		field := typ.Field(i)
+		tag := field.Tag.Get("md")
+		if tag == tagValue {
+			return v.Field(i), true
+		}
+	}
+	return reflect.Value{}, false
+}
 
+func findEndOfSubStruct(lines []string) (currentStruct, remaining []string) {
+	indentCount := 0
 	for i, line := range lines {
-		// We consider a line that has the same or fewer indents to be the end of the sub-struct.
-		if countLeadingSpaces(line) <= indentCount {
-			return i
+		if strings.HasPrefix(line, "- **") {
+			if indentCount == 0 {
+				return lines[:i], lines[i:]
+			}
+			indentCount--
+		} else if strings.HasPrefix(line, "# ") {
+			indentCount++
 		}
 	}
-
-	// If we don't find an earlier end, then the sub-structure extends to the end of the lines slice.
-	return len(lines)
+	return lines, nil
 }
 
-func countLeadingSpaces(s string) int {
-	return len(s) - len(strings.TrimLeft(s, " "))
+func setFieldValue(val reflect.Value, fieldName, fieldValueStr string) error {
+	fieldType, exists := val.Type().FieldByName(fieldName)
+	if !exists {
+		return fmt.Errorf("field %s does not exist", fieldName)
+	}
+
+	field := val.FieldByName(fieldName)
+	if !field.IsValid() || !field.CanSet() {
+		return fmt.Errorf("field %s cannot be set", fieldName)
+	}
+
+	switch fieldType.Type.Kind() {
+	case reflect.String:
+		field.SetString(fieldValueStr)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		intValue, err := strconv.ParseInt(fieldValueStr, 10, 64)
+		if err != nil {
+			return err
+		}
+		field.SetInt(intValue)
+	default:
+		return fmt.Errorf("unsupported type %s", fieldType.Type.Kind())
+	}
+
+	return nil
 }

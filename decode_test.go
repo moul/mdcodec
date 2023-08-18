@@ -15,8 +15,8 @@ func ExampleUnmarshal() {
 		}
 	}
 
-	md := `
-# John Doe (Person)
+	md := `# John Doe (Person)
+
 - **Age**: 30
 - **Address**:
   - **City**: Springfield
@@ -32,6 +32,7 @@ func ExampleUnmarshal() {
 
 func TestUnmarshal(t *testing.T) {
 	md := `# John Doe (Person)
+
 - **Age**: 30
 - **Address**:
   - **Street**: 123 Maple St.
@@ -63,6 +64,7 @@ func TestUnmarshal(t *testing.T) {
 
 func TestInvalidUnmarshal(t *testing.T) {
 	md := `# John Doe (Person)
+
 - **Age**: Thirty
 `
 

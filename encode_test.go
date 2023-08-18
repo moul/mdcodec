@@ -7,47 +7,50 @@ import (
 
 func ExampleMarshal() {
 	type Person struct {
-		Name    string
+		Name    string `md:"title"`
 		Age     int
 		Address struct {
-			City  string
-			State string
+			Street string
+			City   string
 		}
 	}
 
-	p := Person{
-		Name: "John Doe",
-		Age:  30,
-		Address: struct {
-			City  string
-			State string
-		}{
-			City:  "Springfield",
-			State: "IL",
-		},
-	}
+	p := Person{}
+	p.Name = "John Doe"
+	p.Age = 30
+	p.Address.Street = "123 Maple St."
+	p.Address.City = "Springfield"
 
 	md, _ := Marshal(p)
 	fmt.Println(md)
 	// Output:
 	// # John Doe (Person)
+	//
 	// - **Age**: 30
 	// - **Address**:
+	//   - **Street**: 123 Maple St.
 	//   - **City**: Springfield
-	//   - **State**: IL
 }
 
 func TestMarshal(t *testing.T) {
-	p := Person{Name: "John Doe", Age: 30}
+	p := Person{}
+	p.Name = "John Doe"
+	p.Age = 30
 	p.Address.Street = "123 Maple St."
 	p.Address.City = "Springfield"
 
-	md, _ := Marshal(p)
+	md, err := Marshal(p)
+	if err != nil {
+		t.Fatalf("Error during Marshal: %v", err)
+	}
+
 	expected := `# John Doe (Person)
+
 - **Age**: 30
 - **Address**:
   - **Street**: 123 Maple St.
   - **City**: Springfield
+
 `
 
 	if md != expected {
