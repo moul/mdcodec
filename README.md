@@ -2,12 +2,12 @@
 
 Transform Go structures into readable Markdown, tailored for both human and machine consumption.
 
-## 🌟 Features
+## Features
 
-- Hierarchical struct representation using `#` for primary and `##` for secondary structures.
+- Hierarchical struct representation using `#` for primary and nested lists for secondary structures.
 - Uses reflection.
 
-## 🚀 Roadmap
+## Roadmap
 
 - Introduce concise single-line encodings.
 - Introduce markdown table support (See [moul/mdtable](https://github.com/moul/mdtable)).
@@ -16,9 +16,11 @@ Transform Go structures into readable Markdown, tailored for both human and mach
 
 ## Examples
 
+### `mdcodec.`Marshal``
+
 ```go
 type Person struct {
-    Name    string
+    Name    string `md:"title"`
     Age     int
     Address struct {
         City  string
@@ -26,7 +28,9 @@ type Person struct {
     }
 }
 
-p := Person{Name: "John Doe", Age:  30}
+p := Person{}
+p.Name = "John Doe"
+p.Age = 30
 p.Address.City = "Sprintfield"
 p.Address.State = "IL"
 
@@ -34,18 +38,15 @@ md := mdcodec.Marshal(p)
 fmt.Println(md)
 
 // Output:
-// # Person
+// # John Doe (Person)
 //
-// - **Name**: John Doe
 // - **Age**: 30
-//
-// ## Address
-//
-// - **City**: Springfield
-// - **State**: IL
+// - **Address**:
+//   - **City**: Springfield
+//   - **State**: IL
 ```
 
----
+### `mdcodec.Unmarshal`
 
 ```go
 var p Person
