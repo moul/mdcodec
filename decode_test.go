@@ -7,7 +7,7 @@ import (
 
 func ExampleUnmarshal() {
 	type Person struct {
-		Name    string
+		Name    string `md:"title"`
 		Age     int
 		Address struct {
 			City  string

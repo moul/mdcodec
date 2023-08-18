@@ -18,39 +18,63 @@ func Unmarshal(md string, v interface{}) error {
 	}
 
 	val := ptrValue.Elem()
-	return parseStruct(lines, val)
+	return parseStruct(lines, val, "")
 }
 
-func parseStruct(lines []string, val reflect.Value) error {
+func parseStruct(lines []string, val reflect.Value, indent string) error {
 	var i int
 	for i = 0; i < len(lines); i++ {
 		line := lines[i]
 
-		if strings.HasPrefix(line, "# ") {
-			// This denotes a new struct (or a title); we should move on
+		// Handling titles and types
+		if strings.HasPrefix(line, indent+"# ") {
+			// Parsing title and potential type
+			titleContent := strings.TrimPrefix(line, indent+"# ")
+			parts := strings.Split(titleContent, " (")
+			title := parts[0]
+			var typeName string
+			if len(parts) > 1 {
+				typeName = strings.TrimSuffix(parts[1], ")")
+			} else {
+				typeName = title
+			}
+
+			// If the type name matches the current struct's type name, continue parsing it
+			// Else, it's a sign to end the parsing of the current struct
+			if typeName != val.Type().Name() {
+				break
+			}
+
+			// Setting the title field value if it exists
+			titleField, hasTitle := fieldByTag(val, "title")
+			if hasTitle && titleField.Kind() == reflect.String {
+				titleField.SetString(title)
+			}
 			continue
 		}
 
-		if strings.HasPrefix(line, "- **") {
-			// This is a field
+		// Handling fields and potential sub-structures
+		if strings.HasPrefix(line, indent+"- **") {
 			parts := strings.SplitN(line, ":", 2)
-			right := strings.TrimPrefix(parts[1], " ")
-			fieldName := strings.TrimSuffix(strings.TrimPrefix(parts[0], "- **"), "**")
+			fieldName := strings.TrimSuffix(strings.TrimPrefix(parts[0], indent+"- **"), "**")
 
-			// Check if we're dealing with a sub-struct or slice (indicated by a newline without a value after the colon)
-			if len(parts) == 1 || right == "" {
-				field, ok := fieldByName(val, fieldName)
+			if len(parts) == 1 || strings.TrimSpace(parts[1]) == "" {
+				field, ok := fieldByTag(val, fieldName)
 				if !ok {
-					return fmt.Errorf("no field with tag: %s", fieldName)
+					field, ok = fieldByName(val, fieldName)
 				}
-				subLines, remainingLines := findEndOfSubStruct(lines[i+1:])
+				if !ok {
+					return fmt.Errorf("no field with tag or name: %s", fieldName)
+				}
+
+				// For nested structs or slices
+				subLines, remainingLines := findEndOfSubStruct(lines[i+1:], indent+"  ")
+
 				if field.Kind() == reflect.Slice {
-					// If it's a slice, we need to handle each element
 					elemType := field.Type().Elem()
 					slice := reflect.MakeSlice(field.Type(), 0, len(subLines))
 					for _, itemStr := range subLines {
 						item := reflect.New(elemType).Elem()
-						// Assume each item in the slice is a single line for simplicity; adjust as needed
 						if err := setFieldValue(item, fieldName, itemStr); err != nil {
 							return err
 						}
@@ -58,24 +82,32 @@ func parseStruct(lines []string, val reflect.Value) error {
 					}
 					field.Set(slice)
 				} else if field.Kind() == reflect.Struct {
-					// If it's a struct, recursively parse
-					if err := parseStruct(subLines, field); err != nil {
+					if err := parseStruct(subLines, field, indent+"  "); err != nil {
 						return err
 					}
 				}
-				// Adjust the outer loop's index to skip over the lines we've just processed
+
 				i += len(subLines)
 				lines = remainingLines
 				continue
 			}
 
-			fieldValueStr := right
+			fieldValueStr := strings.TrimSpace(parts[1])
 			if err := setFieldValue(val, fieldName, fieldValueStr); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func findEndOfSubStruct(lines []string, indent string) (currentStruct, remaining []string) {
+	for i, line := range lines {
+		if !strings.HasPrefix(line, indent) {
+			return lines[:i], lines[i:]
+		}
+	}
+	return lines, nil
 }
 
 func fieldByName(v reflect.Value, name string) (reflect.Value, bool) {
@@ -96,21 +128,6 @@ func fieldByTag(v reflect.Value, tagValue string) (reflect.Value, bool) {
 		}
 	}
 	return reflect.Value{}, false
-}
-
-func findEndOfSubStruct(lines []string) (currentStruct, remaining []string) {
-	indentCount := 0
-	for i, line := range lines {
-		if strings.HasPrefix(line, "- **") {
-			if indentCount == 0 {
-				return lines[:i], lines[i:]
-			}
-			indentCount--
-		} else if strings.HasPrefix(line, "# ") {
-			indentCount++
-		}
-	}
-	return lines, nil
 }
 
 func setFieldValue(val reflect.Value, fieldName, fieldValueStr string) error {
